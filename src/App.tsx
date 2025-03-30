@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +14,8 @@ import Chat from "./pages/Chat";
 import Discussions from "./pages/Discussions";
 import HowItWorks from "./pages/HowItWorks";
 import Resources from "./pages/Resources";
+import RaiseFunds from "./pages/RaiseFunds";
+import GeoAssistance from "./pages/GeoAssistance";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,8 @@ const App = () => {
               <Route path="/discussions/:circleId" element={<Discussions />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
               <Route path="/resources" element={<Resources />} />
+              <Route path="/raise-funds" element={<RaiseFunds />} />
+              <Route path="/geo-assistance" element={<GeoAssistance />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
