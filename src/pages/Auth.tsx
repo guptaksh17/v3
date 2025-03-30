@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,6 +33,7 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [image, setImage] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // If user is already logged in, redirect to dashboard
@@ -42,54 +42,97 @@ const Auth = () => {
       navigate('/dashboard');
     }
   }, [user, navigate, authType]);
-  
+
+  // Function to handle gender verification
+  const verifyGender = async () => {
+    if (!image) {
+      toast({
+        title: "Profile photo required",
+        description: "Please upload a clear image for verification",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const formData = new FormData();
+    formData.append("file", image);
+
+    try {
+      const response = await fetch("http://localhost:8000/predict", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.gender !== "female") {
+        toast({
+          title: "Registration denied",
+          description: "Only female users are allowed to register",
+          variant: "destructive",
+        });
+        return false;
+      }
+      return true;
+    } catch (error) {
+      toast({
+        title: "Error verifying gender",
+        description: "There was an issue verifying your gender. Please try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (isSubmitting) return;
-    
+
+    setIsSubmitting(true);
+
     try {
-      setIsSubmitting(true);
-      
-      switch (authType) {
-        case 'login':
-          await signIn(email, password);
-          break;
-        case 'register':
-          if (password !== confirmPassword) {
-            toast({
-              title: "Passwords don't match",
-              description: "Please make sure your passwords match",
-              variant: "destructive",
-            });
-            return;
-          }
-          
-          if (password.length < 6) {
-            toast({
-              title: "Password too short",
-              description: "Password must be at least 6 characters",
-              variant: "destructive",
-            });
-            return;
-          }
-          
-          await signUp(email, password);
+      if (authType === 'register') {
+        if (password !== confirmPassword) {
           toast({
-            title: "Account created",
-            description: "Please check your email to confirm your account",
+            title: "Passwords don't match",
+            description: "Please make sure your passwords match",
+            variant: "destructive",
           });
-          break;
-        case 'reset-password':
-          await resetPassword(email);
+          return;
+        }
+
+        if (password.length < 6) {
           toast({
-            title: "Password reset email sent",
-            description: "Please check your email for the reset link",
+            title: "Password too short",
+            description: "Password must be at least 6 characters",
+            variant: "destructive",
           });
-          break;
+          return;
+        }
+
+        // Verify gender before allowing registration
+        const isFemale = await verifyGender();
+        if (!isFemale) {
+          setIsSubmitting(false);
+          return;
+        }
+
+        await signUp(email, password);
+        toast({
+          title: "Account created",
+          description: "Please check your email to confirm your account",
+        });
+      } else if (authType === 'login') {
+        await signIn(email, password);
+      } else if (authType === 'reset-password') {
+        await resetPassword(email);
+        toast({
+          title: "Password reset email sent",
+          description: "Please check your email for the reset link",
+        });
       }
     } catch (error: any) {
-      console.error('Auth error:', error);
       toast({
         title: "Authentication error",
         description: error.message || "An error occurred during authentication",
@@ -144,26 +187,34 @@ const Auth = () => {
             )}
             
             {authType === 'register' && (
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  disabled={isSubmitting}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="image">Upload Profile Photo (for verification)</Label>
+                  <Input
+                    id="image"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImage(e.target.files?.[0] || null)}
+                    required
+                  />
+                </div>
+              </>
             )}
             
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={isSubmitting || loading}
-            >
+            <Button type="submit" className="w-full" disabled={isSubmitting || loading}>
               {isSubmitting ? (
                 <>
                   <Loader2 size={16} className="mr-2 animate-spin" />
@@ -178,39 +229,6 @@ const Auth = () => {
               )}
             </Button>
           </form>
-          
-          <div className="mt-6 pt-6 border-t border-border text-center">
-            {authType === 'login' && (
-              <div className="space-y-3">
-                <div>
-                  <Link to="/auth/register" className="text-primary hover:underline">
-                    Need an account? Register
-                  </Link>
-                </div>
-                <div>
-                  <Link to="/auth/reset-password" className="text-muted-foreground hover:text-foreground">
-                    Forgot your password?
-                  </Link>
-                </div>
-              </div>
-            )}
-            
-            {authType === 'register' && (
-              <Link to="/auth/login" className="text-primary hover:underline">
-                Already have an account? Log in
-              </Link>
-            )}
-            
-            {authType === 'reset-password' && (
-              <Link to="/auth/login" className="text-primary hover:underline">
-                Back to log in
-              </Link>
-            )}
-          </div>
-        </div>
-        
-        <div className="mt-8 text-center text-sm text-muted-foreground">
-          <p>By using Silent Guardians, you agree to our <Link to="/terms" className="underline">Terms of Service</Link> and <Link to="/privacy" className="underline">Privacy Policy</Link>.</p>
         </div>
       </div>
     </div>
