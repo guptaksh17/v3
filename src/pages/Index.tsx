@@ -1,11 +1,10 @@
-
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import Hero from '@/components/landing/Hero';
 import Features from '@/components/landing/Features';
 import Privacy from '@/components/landing/Privacy';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, MessageCircle, ShieldAlert, BookOpen } from 'lucide-react';
+import { ArrowRight, MessageCircle, ShieldAlert, BookOpen, CircleDollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SafetyButton from '@/components/ui/SafetyButton';
 import { useToast } from '@/hooks/use-toast';
@@ -47,7 +46,7 @@ const Index = () => {
                 offers multiple ways to connect securely and anonymously.
               </p>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
                 <div className="glass-card p-6 rounded-2xl hover:shadow-md transition-all duration-300 hover:-translate-y-1">
                   <div className="bg-primary/10 p-4 rounded-full w-fit mx-auto mb-4">
                     <MessageCircle size={24} className="text-primary" />
@@ -91,6 +90,21 @@ const Index = () => {
                     onClick={handleEmergencyClick} 
                     className="w-full"
                   />
+                </div>
+                
+                <div className="glass-card p-6 rounded-2xl hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                  <div className="bg-primary/10 p-4 rounded-full w-fit mx-auto mb-4">
+                    <CircleDollarSign size={24} className="text-primary" />
+                  </div>
+                  <h3 className="text-xl font-medium mb-3">Raise Funds</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Create a fundraiser and receive financial support for your cause.
+                  </p>
+                  <Button asChild variant="outline" className="w-full rounded-full">
+                    <Link to="/raise-funds">
+                      Start Fundraiser <ArrowRight size={16} className="ml-2" />
+                    </Link>
+                  </Button>
                 </div>
               </div>
             </div>

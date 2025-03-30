@@ -1,9 +1,8 @@
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, X, Shield, LogIn, User, LogOut } from "lucide-react";
+import { Menu, X, Shield, LogIn, User, LogOut, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -65,6 +64,12 @@ const Header = () => {
               className="text-sm font-medium transition-colors hover:text-primary"
             >
               Resources
+            </Link>
+            <Link
+              to="/geo-assistance"
+              className="text-sm font-medium transition-colors hover:text-primary"
+            >
+              Geo Assistance
             </Link>
             <Link
               to="/emergency-support"
@@ -146,6 +151,13 @@ const Header = () => {
                     onClick={closeSheet}
                   >
                     Resources
+                  </Link>
+                  <Link
+                    to="/geo-assistance"
+                    className="text-lg font-medium hover:text-primary"
+                    onClick={closeSheet}
+                  >
+                    Geo Assistance
                   </Link>
                   <Link
                     to="/emergency-support"
