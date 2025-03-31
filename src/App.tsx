@@ -16,6 +16,7 @@ import HowItWorks from "./pages/HowItWorks";
 import Resources from "./pages/Resources";
 import RaiseFunds from "./pages/RaiseFunds";
 import GeoAssistance from "./pages/GeoAssistance";
+import GenderDetection from "./pages/GenderDetection";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => {
               <Route path="/resources" element={<Resources />} />
               <Route path="/raise-funds" element={<RaiseFunds />} />
               <Route path="/geo-assistance" element={<GeoAssistance />} />
+              <Route path="/gender-detection" element={<GenderDetection />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

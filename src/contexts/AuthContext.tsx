@@ -8,10 +8,15 @@ interface AuthContextType {
   user: SupabaseUser | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<AuthResponse>;
+  signUp: (email: string, password: string) => Promise<AuthResponse>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<AuthResponse>;
+}
+
+interface AuthResponse {
+  error?: Error;
+  data?: any;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,10 +52,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<AuthResponse> => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
         console.error("Sign in error:", error);
@@ -59,28 +64,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           description: error.message,
           variant: "destructive",
         });
-        throw error;
+        return { error };
       }
       
-      console.log("Sign in successful:", data);
+      console.log("Sign in successful");
       toast({
         title: "Welcome back",
         description: "You've successfully logged in",
       });
       
       navigate('/dashboard');
+      return { data: true };
     } catch (error) {
       console.error("Sign in error:", error);
-      throw error;
+      return { error };
     } finally {
       setLoading(false);
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string): Promise<AuthResponse> => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signUp({ 
+      const { error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
@@ -95,18 +101,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           description: error.message,
           variant: "destructive",
         });
-        throw error;
+        return { error };
       }
       
-      console.log("Sign up successful:", data);
-      toast({
-        title: "Account created",
-        description: "Please check your email to confirm your account",
-      });
-      
+      console.log("Sign up successful");
+      return { data: true };
     } catch (error) {
       console.error("Sign up error:", error);
-      throw error;
+      return { error };
     } finally {
       setLoading(false);
     }
@@ -143,7 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = async (email: string): Promise<AuthResponse> => {
     try {
       setLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -156,16 +158,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           description: error.message,
           variant: "destructive",
         });
-        throw error;
+        return { error };
       }
       
       toast({
         title: "Password reset email sent",
         description: "Please check your email for instructions",
       });
+      return { data: true };
     } catch (error) {
       console.error("Reset password error:", error);
-      throw error;
+      return { error };
     } finally {
       setLoading(false);
     }

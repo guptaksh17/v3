@@ -1,238 +1,245 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Shield, ArrowRight, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import WebcamVerification from "@/components/auth/WebcamVerification";
 
-// Convert 'login', 'register', 'reset-password' to title case
-const getPageTitle = (page: string) => {
-  switch (page) {
-    case 'login':
-      return 'Log In';
-    case 'register':
-      return 'Register';
-    case 'reset-password':
-      return 'Reset Password';
-    default:
-      return 'Authentication';
-  }
-};
+const formSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
 
-const Auth = () => {
+export default function Auth() {
+  const [isRegister, setIsRegister] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showWebcam, setShowWebcam] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user, signIn, signUp, resetPassword, loading } = useAuth();
   const { toast } = useToast();
-  
-  // Determine which auth screen to show based on URL
-  const authType = location.pathname.split('/').pop() || 'login';
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [image, setImage] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If user is already logged in, redirect to dashboard
-  useEffect(() => {
-    if (user && authType !== 'reset-password') {
-      navigate('/dashboard');
-    }
-  }, [user, navigate, authType]);
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-  // Function to handle gender verification
-  const verifyGender = async () => {
-    if (!image) {
+  const handleVerificationComplete = (success: boolean) => {
+    console.log("Verification complete:", success);
+    setShowWebcam(false);
+    setIsVerified(success);
+    
+    if (success) {
       toast({
-        title: "Profile photo required",
-        description: "Please upload a clear image for verification",
+        title: "Verification Successful",
+        description: "You can now complete your registration.",
+      });
+    } else {
+      toast({
+        title: "Verification Failed",
+        description: "This platform is only for women. Please try again if there was an error.",
         variant: "destructive",
       });
-      return false;
+      // Reset form on verification failure
+      form.reset();
     }
+  };
 
-    const formData = new FormData();
-    formData.append("file", image);
-
-    try {
-      const response = await fetch("http://localhost:8000/predict", {
-        method: "POST",
-        body: formData,
+  const startVerification = () => {
+    if (!form.getValues().email || !form.getValues().password) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in your email and password first.",
+        variant: "destructive",
       });
+      return;
+    }
+    setShowWebcam(true);
+  };
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      if (isRegister) {
+        if (!isVerified) {
+          toast({
+            title: "Verification Required",
+            description: "Please complete gender verification first.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Double check verification status
+        if (!isVerified) {
+          console.error("Attempted to register without verification");
+          toast({
+            title: "Error",
+            description: "Gender verification is required for registration.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      setIsLoading(true);
+      const response = await fetch(`/api/${isRegister ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...values,
+          isVerified: isRegister ? isVerified : undefined
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text() || 'Authentication failed');
+      }
 
       const data = await response.json();
-
-      if (data.gender !== "female") {
+      
+      if (isRegister) {
         toast({
-          title: "Registration denied",
-          description: "Only female users are allowed to register",
-          variant: "destructive",
+          title: "Registration Successful",
+          description: "You can now log in with your credentials.",
         });
-        return false;
+        setIsRegister(false);
+      } else {
+        // Handle successful login
+        navigate('/dashboard');
       }
-      return true;
     } catch (error) {
+      console.error('Auth error:', error);
       toast({
-        title: "Error verifying gender",
-        description: "There was an issue verifying your gender. Please try again.",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Something went wrong",
         variant: "destructive",
       });
-      return false;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (isSubmitting) return;
-
-    setIsSubmitting(true);
-
-    try {
-      if (authType === 'register') {
-        if (password !== confirmPassword) {
-          toast({
-            title: "Passwords don't match",
-            description: "Please make sure your passwords match",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (password.length < 6) {
-          toast({
-            title: "Password too short",
-            description: "Password must be at least 6 characters",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Verify gender before allowing registration
-        const isFemale = await verifyGender();
-        if (!isFemale) {
-          setIsSubmitting(false);
-          return;
-        }
-
-        await signUp(email, password);
-        toast({
-          title: "Account created",
-          description: "Please check your email to confirm your account",
-        });
-      } else if (authType === 'login') {
-        await signIn(email, password);
-      } else if (authType === 'reset-password') {
-        await resetPassword(email);
-        toast({
-          title: "Password reset email sent",
-          description: "Please check your email for the reset link",
-        });
+      if (isRegister) {
+        setIsVerified(false); // Reset verification on error
       }
-    } catch (error: any) {
-      toast({
-        title: "Authentication error",
-        description: error.message || "An error occurred during authentication",
-        variant: "destructive",
-      });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
-  
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="flex justify-center mb-6">
-          <Link to="/" className="flex items-center space-x-2 text-foreground">
-            <Shield className="h-10 w-10 text-primary" />
-            <span className="text-2xl font-semibold">Silent Guardians</span>
-          </Link>
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="w-full max-w-md p-6 space-y-6">
+        <div className="space-y-2 text-center">
+          <h1 className="text-2xl font-bold">
+            {isRegister ? "Create an account" : "Welcome back"}
+          </h1>
+          <p className="text-muted-foreground">
+            {isRegister
+              ? "Enter your details to create your account"
+              : "Enter your credentials to sign in"}
+          </p>
         </div>
-        
-        <div className="bg-card rounded-xl shadow-lg p-8 border border-border">
-          <h1 className="text-2xl font-medium mb-6">{getPageTitle(authType)}</h1>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isSubmitting}
+
+        {showWebcam ? (
+          <WebcamVerification
+            onVerificationComplete={handleVerificationComplete}
+            onCancel={() => setShowWebcam(false)}
+          />
+        ) : (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter your email"
+                        type="email"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            
-            {authType !== 'reset-password' && (
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  disabled={isSubmitting}
-                />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter your password"
+                        type="password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-4">
+                {isRegister && !isVerified && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={startVerification}
+                  >
+                    Verify Gender
+                  </Button>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading || (isRegister && !isVerified)}
+                >
+                  {isLoading ? (
+                    <>Loading...</>
+                  ) : isRegister ? (
+                    "Create account"
+                  ) : (
+                    "Sign in"
+                  )}
+                </Button>
               </div>
-            )}
-            
-            {authType === 'register' && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="image">Upload Profile Photo (for verification)</Label>
-                  <Input
-                    id="image"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setImage(e.target.files?.[0] || null)}
-                    required
-                  />
-                </div>
-              </>
-            )}
-            
-            <Button type="submit" className="w-full" disabled={isSubmitting || loading}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={16} className="mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  {authType === 'login' ? 'Log In' : 
-                   authType === 'register' ? 'Create Account' : 'Send Reset Link'}
-                  <ArrowRight size={16} className="ml-2" />
-                </>
-              )}
-            </Button>
-          </form>
-        </div>
+
+              <div className="text-center">
+                <Button
+                  type="button"
+                  variant="link"
+                  onClick={() => {
+                    setIsRegister(!isRegister);
+                    setIsVerified(false);
+                    form.reset();
+                  }}
+                >
+                  {isRegister
+                    ? "Already have an account? Sign in"
+                    : "Don't have an account? Create one"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
       </div>
     </div>
   );
-};
-
-export default Auth;
+}
