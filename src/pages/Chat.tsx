@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,7 +70,7 @@ const ChatPage = () => {
   }, [circleId, navigate, toast]);
 
   // Initialize chat hook with proper circleId
-  const { messages: chatMessages, isLoading: messagesLoading, sendMessage } = useChat(circleId || "");
+  const { messages: chatMessages, isLoading: messagesLoading, sendMessage, deleteMessage } = useChat(circleId || "");
 
   // Transform messages for the chat component
   const formattedMessages = chatMessages.map((message) => ({
@@ -141,6 +140,7 @@ const ChatPage = () => {
           <ChatWindow
             messages={formattedMessages}
             onSendMessage={sendMessage}
+            onDeleteMessage={deleteMessage}
             isLoading={messagesLoading}
           />
         </CardContent>

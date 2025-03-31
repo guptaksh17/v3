@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Form,
   FormControl,
@@ -28,6 +29,7 @@ export default function Auth() {
   const [isVerified, setIsVerified] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signIn, signUp } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -95,38 +97,25 @@ export default function Auth() {
       }
 
       setIsLoading(true);
-      const response = await fetch(`/api/${isRegister ? 'register' : 'login'}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...values,
-          isVerified: isRegister ? isVerified : undefined
-        }),
-      });
+      const { error } = await (isRegister ? signUp : signIn)(values.email, values.password);
 
-      if (!response.ok) {
-        throw new Error(await response.text() || 'Authentication failed');
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
-      
       if (isRegister) {
         toast({
           title: "Registration Successful",
-          description: "You can now log in with your credentials.",
+          description: "Please check your email to confirm your account.",
         });
         setIsRegister(false);
-      } else {
-        // Handle successful login
-        navigate('/dashboard');
       }
+      // No need to navigate here as AuthContext handles it
     } catch (error) {
       console.error('Auth error:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        description: error instanceof Error ? error.message : "Authentication failed",
         variant: "destructive",
       });
       if (isRegister) {
@@ -198,9 +187,9 @@ export default function Auth() {
                 {isRegister && !isVerified && (
                   <Button
                     type="button"
-                    variant="outline"
-                    className="w-full"
                     onClick={startVerification}
+                    className="w-full"
+                    disabled={isLoading}
                   >
                     Verify Gender
                   </Button>
@@ -211,31 +200,28 @@ export default function Auth() {
                   className="w-full"
                   disabled={isLoading || (isRegister && !isVerified)}
                 >
-                  {isLoading ? (
-                    <>Loading...</>
-                  ) : isRegister ? (
-                    "Create account"
-                  ) : (
-                    "Sign in"
-                  )}
+                  {isLoading
+                    ? "Please wait..."
+                    : isRegister
+                    ? "Create account"
+                    : "Sign in"}
                 </Button>
               </div>
 
-              <div className="text-center">
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={() => {
-                    setIsRegister(!isRegister);
-                    setIsVerified(false);
-                    form.reset();
-                  }}
-                >
-                  {isRegister
-                    ? "Already have an account? Sign in"
-                    : "Don't have an account? Create one"}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="link"
+                className="w-full"
+                onClick={() => {
+                  setIsRegister(!isRegister);
+                  setIsVerified(false);
+                  form.reset();
+                }}
+              >
+                {isRegister
+                  ? "Already have an account? Sign in"
+                  : "Need an account? Register"}
+              </Button>
             </form>
           </Form>
         )}

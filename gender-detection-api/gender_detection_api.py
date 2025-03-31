@@ -56,36 +56,35 @@ except Exception as e:
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 def detect_faces(image):
+    """Detect faces in the image using OpenCV's DNN face detector"""
     # Convert to grayscale for face detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    # More lenient face detection parameters
+    # Load the face detection model
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    
+    # Detect faces with more lenient parameters
     faces = face_cascade.detectMultiScale(
         gray,
-        scaleFactor=1.2,  # More lenient scale factor (was 1.1)
-        minNeighbors=3,   # Reduced from 5 to 3
-        minSize=(60, 60)  # Slightly smaller minimum face size
+        scaleFactor=1.1,  # More precise scaling
+        minNeighbors=5,   # Increased for better accuracy
+        minSize=(80, 80), # Increased minimum face size
+        flags=cv2.CASCADE_SCALE_IMAGE
     )
     
-    if len(faces) == 0:
-        return None
+    face_images = []
+    for (x, y, w, h) in faces:
+        # Add more padding around the face
+        padding = int(min(w, h) * 0.3)  # 30% padding
+        x1 = max(0, x - padding)
+        y1 = max(0, y - padding)
+        x2 = min(image.shape[1], x + w + padding)
+        y2 = min(image.shape[0], y + h + padding)
+        
+        face = image[y1:y2, x1:x2]
+        face_images.append(face)
     
-    # Get the largest face
-    largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
-    x, y, w, h = largest_face
-    
-    # Add padding around the face (20%)
-    padding_x = int(w * 0.2)
-    padding_y = int(h * 0.2)
-    
-    # Ensure padded coordinates are within image bounds
-    start_x = max(x - padding_x, 0)
-    start_y = max(y - padding_y, 0)
-    end_x = min(x + w + padding_x, image.shape[1])
-    end_y = min(y + h + padding_y, image.shape[0])
-    
-    face_img = image[start_y:end_y, start_x:end_x]
-    return face_img if face_img.size > 0 else None
+    return face_images
 
 def preprocess_image(face):
     """Preprocess image for gender detection."""
@@ -114,35 +113,38 @@ def base64_to_image(data):
     except Exception as e:
         return None
 
-def predict_gender(processed_face):
-    """Predict gender from preprocessed face image."""
+def predict_gender(face_image):
+    """Predict gender from face image"""
     try:
-        # Get prediction
-        prediction = model.predict(processed_face, verbose=0)
-        female_confidence = float(prediction[0][0])
-        male_confidence = 1.0 - female_confidence
+        # Preprocess the image
+        processed_image = preprocess_image(face_image)
         
-        logger.info("=" * 50)
+        # Get prediction
+        prediction = model.predict(processed_image, verbose=0)[0][0]
+        female_confidence = float(prediction)
+        male_confidence = float(1 - prediction)
+        
+        # Log detailed prediction results
+        logger.info("==================================================")
         logger.info("Gender Prediction Results:")
         logger.info(f"Female confidence: {female_confidence:.4f} ({female_confidence*100:.1f}%)")
         logger.info(f"Male confidence: {male_confidence:.4f} ({male_confidence*100:.1f}%)")
         
-        # Strict verification rules
-        is_female = female_confidence > 0.7 and male_confidence < 0.3
-        logger.info(f"Verification rules:")
-        logger.info(f"- Female confidence > 0.7: {female_confidence > 0.7}")
-        logger.info(f"- Male confidence < 0.3: {male_confidence < 0.3}")
-        logger.info(f"Final result: {'✅ VERIFIED' if is_female else '❌ NOT VERIFIED'}")
-        logger.info("=" * 50)
+        # More balanced verification rules
+        logger.info("Verification rules:")
+        logger.info(f"- Female confidence > 0.6: {female_confidence > 0.6}")
         
-        if is_female:
-            return True, None
-        else:
-            return False, f"Unable to verify as female user (Female: {female_confidence*100:.1f}%, Male: {male_confidence*100:.1f}%)"
-            
+        # Simplified verification rule with 60% threshold
+        is_female = female_confidence > 0.6
+        
+        logger.info(f"Final result: {'✅ VERIFIED' if is_female else '❌ NOT VERIFIED'}")
+        logger.info("==================================================")
+        
+        return is_female, female_confidence, male_confidence
+        
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
-        return False, f"Error predicting gender: {str(e)}"
+        logger.error(f"Error in gender prediction: {str(e)}")
+        return False, 0.0, 0.0
 
 class ConnectionManager:
     def __init__(self):
@@ -173,66 +175,80 @@ manager = ConnectionManager()
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    last_process_time = 0
-    min_interval = 0.5  # Minimum 0.5 seconds between processing frames
+    logger.info("connection open")
     
     try:
+        last_process_time = 0
         while True:
-            data = await websocket.receive_text()
-            
-            # Skip processing if it's too soon since last frame
-            current_time = time.time()
-            if current_time - last_process_time < min_interval:
-                continue
-                
-            if data == "start_stream":
-                continue
-                
             try:
-                # Process frame
-                frame = base64_to_image(data)
-                if frame is None:
-                    logger.error("Invalid image data received")
-                    await websocket.send_json({"error": "Invalid image data"})
+                # Receive frame data
+                data = await websocket.receive_text()
+                
+                # Skip if not enough time has passed since last process
+                current_time = time.time()
+                if current_time - last_process_time < 0.5:  # Process every 500ms
                     continue
+                
+                # Decode base64 image
+                try:
+                    # Remove data URL prefix if present
+                    if data.startswith('data:image/jpeg;base64,'):
+                        data = data.split(',')[1]
                     
+                    # Decode base64 to bytes
+                    image_data = base64.b64decode(data)
+                    nparr = np.frombuffer(image_data, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    
+                    if frame is None:
+                        logger.error("Failed to decode image")
+                        continue
+                        
+                except Exception as e:
+                    logger.error(f"Error decoding image: {str(e)}")
+                    continue
+                
                 # Detect face
-                face = detect_faces(frame)
-                if face is None:
-                    logger.info("No face detected in frame")
+                faces = detect_faces(frame)
+                if not faces:
+                    logger.info("No faces detected in frame")
                     await websocket.send_json({"error": "No face detected - please ensure your face is clearly visible and well-lit"})
                     continue
-                    
-                # Preprocess for model
-                processed_face = preprocess_image(face)
-                if processed_face is None:
-                    logger.error("Error preprocessing face image")
-                    await websocket.send_json({"error": "Error processing image"})
-                    continue
-                    
+                
                 # Get prediction
-                is_female, error_msg = predict_gender(processed_face)
+                is_female, female_confidence, male_confidence = predict_gender(faces[0])
                 
                 # Update last process time
                 last_process_time = current_time
                 
                 # Send response
-                response = {"success": is_female}
+                response = {
+                    "success": is_female,
+                    "female_confidence": female_confidence,
+                    "male_confidence": male_confidence
+                }
+                
                 if not is_female:
-                    response["error"] = error_msg
-                    
+                    response["error"] = f"Unable to verify as female user (Female: {female_confidence*100:.1f}%, Male: {male_confidence*100:.1f}%)"
+                
                 logger.info(f"Sending response: {response}")
                 await websocket.send_json(response)
                     
+            except WebSocketDisconnect:
+                logger.info("Client disconnected")
+                break
             except Exception as e:
                 logger.error(f"Error processing frame: {str(e)}")
-                await websocket.send_json({"error": "Error processing image"})
+                await websocket.send_json({"error": f"Error processing frame: {str(e)}"})
+                continue
                 
-    except WebSocketDisconnect:
-        logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        logger.info("connection closed")
 
 # Start the server
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting server...")
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8005)

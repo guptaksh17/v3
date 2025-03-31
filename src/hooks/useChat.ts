@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -153,9 +152,70 @@ export function useChat(circleId: string) {
     }
   };
 
+  const deleteMessage = async (messageId: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to delete messages",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // First check if the message exists and belongs to the user
+      const { data: message, error: fetchError } = await supabase
+        .from('circle_messages')
+        .select('user_id')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (message.user_id !== user.id) {
+        toast({
+          title: "Error",
+          description: "You can only delete your own messages",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Delete the message
+      const { error: deleteError } = await supabase
+        .from('circle_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      // Remove the message from the UI
+      setMessages((prevMessages) => 
+        prevMessages.filter(msg => msg.id !== messageId)
+      );
+
+      toast({
+        title: "Success",
+        description: "Message deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete message",
+        variant: "destructive",
+      });
+    }
+  };
+
   return {
     messages,
     isLoading,
     sendMessage,
+    deleteMessage,
   };
 }

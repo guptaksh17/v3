@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from "react";
 import ChatMessage, { ChatMessageProps } from "./ChatMessage";
 import ChatInput from "./ChatInput";
@@ -8,12 +7,14 @@ import { useAuth } from "@/contexts/AuthContext";
 interface ChatWindowProps {
   messages: Omit<ChatMessageProps, "isCurrentUser">[];
   onSendMessage: (message: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
   isLoading?: boolean;
 }
 
 const ChatWindow = ({ 
   messages, 
-  onSendMessage, 
+  onSendMessage,
+  onDeleteMessage,
   isLoading = false 
 }: ChatWindowProps) => {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ const ChatWindow = ({
                 key={message.id}
                 {...message}
                 isCurrentUser={message.sender.id === user?.id}
+                onDelete={onDeleteMessage}
               />
             ))
           )}

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw } from "lucide-react";
+import { config } from "@/config";
 
 interface WebcamVerificationProps {
   onVerificationComplete: (success: boolean) => void;
@@ -39,17 +40,23 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
   };
 
   const stopWebcam = () => {
+    console.log("Stopping webcam...");
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        console.log("Stopping track:", track.kind);
+        track.stop();
+      });
       videoRef.current.srcObject = null;
     }
     setIsVerifying(false);
     if (wsRef.current) {
+      console.log("Closing WebSocket connection...");
       wsRef.current.close();
       wsRef.current = null;
     }
     if (frameIntervalRef.current) {
+      console.log("Clearing frame interval...");
       clearInterval(frameIntervalRef.current);
       frameIntervalRef.current = null;
     }
@@ -62,7 +69,7 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
     }
 
     try {
-      const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8001/ws`;
+      const wsUrl = config.websocket.serverUrl;
       console.log("Connecting to WebSocket at:", wsUrl);
       
       wsRef.current = new WebSocket(wsUrl);
@@ -84,6 +91,7 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
             setDetectionMessage(data.error);
             setShowError(true);
             onVerificationComplete(false);
+            stopWebcam();
             return;
           }
           
@@ -92,6 +100,7 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
             setDetectionMessage(data.error || "Verification failed");
             setShowError(true);
             onVerificationComplete(false);
+            stopWebcam();
             return;
           }
 
@@ -100,6 +109,10 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
             stopWebcam();
             setIsVerified(true);
             onVerificationComplete(true);
+            // Add a 2-second delay before redirecting
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 2000);
             return;
           }
         } catch (error) {
@@ -107,6 +120,7 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
           setDetectionMessage("Error processing response. Please try again.");
           setShowError(true);
           onVerificationComplete(false);
+          stopWebcam();
         }
       };
       
@@ -114,7 +128,7 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
         console.error("WebSocket error:", event);
         setDetectionMessage("Connection error. Please check your connection and try again.");
         setShowError(true);
-        stopFrameCapture();
+        stopWebcam();
       };
 
       wsRef.current.onclose = (event) => {
@@ -122,13 +136,14 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
         if (!isVerified) {
           setDetectionMessage("Connection closed. Please try again.");
           setShowError(true);
-          stopFrameCapture();
+          stopWebcam();
         }
       };
     } catch (error) {
       console.error("Error creating WebSocket:", error);
       setDetectionMessage("Could not establish connection. Please try again.");
       setShowError(true);
+      stopWebcam();
     }
   };
 
@@ -179,12 +194,14 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
       console.error("Error sending frame:", error);
       setDetectionMessage("Error capturing video frame. Please try again.");
       setShowError(true);
+      stopWebcam();
     }
   };
 
   const handleRetry = () => {
     setShowError(false);
     setDetectionMessage('');
+    stopWebcam();
     connectWebSocket();
   };
 
@@ -199,12 +216,15 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
         console.error("Error initializing:", error);
         setDetectionMessage("Error initializing camera. Please try again.");
         setShowError(true);
+        stopWebcam();
       }
     };
 
     initialize();
 
+    // Cleanup function
     return () => {
+      console.log("Component unmounting, cleaning up...");
       stopWebcam();
     };
   }, []);
@@ -247,7 +267,15 @@ const WebcamVerification = ({ onVerificationComplete, onCancel }: WebcamVerifica
         )}
 
         <div className="flex justify-between">
-          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              stopWebcam();
+              onCancel();
+            }}
+          >
+            Cancel
+          </Button>
         </div>
       </div>
     </Card>
